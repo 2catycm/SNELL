@@ -303,6 +303,18 @@ class TuningModule(nn.Module):
                 self.learnable = KLoRA(in_dim, out_dim, q_dim=low_rank_dim, norm_p=norm_p, enable_bias=False)
             else:
                 self.learnable = SNELL(in_dim, out_dim, init_thres=init_thres, q_dim=low_rank_dim, norm_p=norm_p, enable_bias=False)
+        elif tuning_model == 'full_on_fine_places':
+            self.learnable = nn.Linear(in_dim, out_dim, bias=bias)
+            nn.init.zeros_(self.learnable.weight) # 这样其实不对，因为导数理论上是0
+            if bias:
+                nn.init.zeros_(self.learnable.bias)
+
+        elif tuning_model == "linear_probing":
+            # 认定为全量微调, 不对外界正常流程做干涉, 让外面的 delta_q 等是0
+            self.forward = lambda x: 0
+        elif tuning_model.startswith("yuequ_ark"):
+            self.forward = lambda x: 0
+
         self.drop_path = nn.Identity() if kwargs['no_drop_path'] else DropPath(0.1)
 
     def forward(self, x):
@@ -342,15 +354,16 @@ class AttentionSNELLParallel(nn.Module):
         v = self.v(x).reshape(B, N, self.num_heads, C // self.num_heads).permute(0, 2, 1, 3) # B, num_head, N, C
 
         x_drop = self.additional_drop(x)
-        q_delta = self.additional_q(x_drop).reshape(B, N, self.num_heads, C // self.num_heads).permute(0, 2, 1, 3)
+        q_delta = self.additional_q(x_drop)
+        q_delta = q_delta.reshape(B, N, self.num_heads, C // self.num_heads).permute(0, 2, 1, 3) if q_delta is not 0 else 0
         q = q + q_delta
 
-        k_delta = self.additional_k(x_drop).reshape(B, N, self.num_heads,
-                                                        C // self.num_heads).permute(0, 2, 1, 3)
+        k_delta = self.additional_k(x_drop)
+        k_delta = k_delta.reshape(B, N, self.num_heads, C // self.num_heads).permute(0, 2, 1, 3) if k_delta is not 0 else 0
         k = k + k_delta
 
-        v_delta = self.additional_v(x_drop).reshape(B, N, self.num_heads,
-                                                                    C // self.num_heads).permute(0, 2, 1, 3)
+        v_delta = self.additional_v(x_drop)
+        v_delta = v_delta.reshape(B, N, self.num_heads, C // self.num_heads).permute(0, 2, 1, 3) if v_delta is not 0 else 0
         v = v + v_delta
 
         attn = (q @ k.transpose(-2, -1)) * self.scale

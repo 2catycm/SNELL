@@ -2,20 +2,12 @@
 # hyperparameters
 export DATASET=cifar
 export SEED=0
-export batch_size=16
+export batch_size=64
 export LR=0.001
 export WEIGHT_DECAY=0.01
-export tuning_model=snell
+export tuning_model=linear_probing
 export low_rank_dim=32
 export init_thres=0.9
-
-# class_num: 100
-# train_aug: False
-# labelsmoothing: 0.1
-# batch_size: 64
-# epochs: 100
-# warmup_epochs: 10
-# --lr 5e-4 --wd 1e-1 --eval True --dpr 0.1 
 
 export exp_name=vtab_vit_supervised_${LR}_${init_thres}_${WEIGHT_DECAY}_${low_rank_dim}_${batch_size}_200
 

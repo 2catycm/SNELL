@@ -23,6 +23,7 @@ import os
 from collections import OrderedDict
 from lib import utils
 import time
+import torch
 
 
 def get_args_parser():
@@ -231,8 +232,6 @@ def main(args):
     
 
 
-    fully_fine_tuned_keys = []
-    fully_fine_tuned_keys.extend(['head.weight', 'head.bias', 'cls_token'])
 
     model = models.__dict__[args.model_name](img_size=args.input_size,
                                                 drop_rate=args.drop,
@@ -247,6 +246,7 @@ def main(args):
                                                 init_thres=args.init_thres,
                                                 norm_p=args.norm_p
                                                 )
+
 
     train_engine = train_one_epoch
     test_engine = evaluate
@@ -353,7 +353,32 @@ def main(args):
             if args.nb_classes != model.head.weight.shape[0]:
                 model.reset_classifier(args.nb_classes)
 
+    import os
+    kernel_name = os.environ.get('KERNEL_NAME', None)
+    if kernel_name is not None:
+        print(f"博观而约取，厚积而薄发！{kernel_name}")
+        yuequ_config = dict(
+            kernel_name=kernel_name,
+            latent_dim=args.low_rank_dim,
+            modified_modules = ["q", "v"],
+            lora_alpha = 16,
+            pissa=False
+        )
+        dtype = "float32"
+        if yuequ_config is not None:
+            from boguan_yuequ.algorithms.lora.kernel_lora.auto import get_light_kernel_tuning_model
+            model = get_light_kernel_tuning_model(
+                model=model, 
+                kernel_dtype = eval(f"torch.{dtype}"), 
+                **yuequ_config
+            )
+        # exit()
+
+
     model.to(device)
+
+
+
 
     if args.mixup > 0.:
         # smoothing is handled with mixup label transform
